@@ -1,0 +1,181 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build static export
+        run: node scripts/build-static.js
+        env:
+          NEXT_PUBLIC_STORAGE: local
+
+      - name: Build Electron Windows installer
+        run: npx electron-builder --win --config electron-builder.yml
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: dist-electron/*.exe
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build static export
+        run: node scripts/build-static.js
+        env:
+          NEXT_PUBLIC_STORAGE: local
+
+      - name: Build Electron macOS DMG
+        run: npx electron-builder --mac --config electron-builder.yml
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Rename DMG
+        run: |
+          for f in dist-electron/*.dmg; do
+            mv "$f" "dist-electron/Infinity.Bottle.macOS.dmg"
+          done
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: dist-electron/*.dmg
+
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - run: npm ci
+
+      - name: Build static export
+        run: node scripts/build-static.js
+        env:
+          NEXT_PUBLIC_STORAGE: local
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug
+
+      - name: Rename APK
+        run: mv android/app/build/outputs/apk/debug/app-debug.apk android/app/build/outputs/apk/debug/Infinity.Bottle.apk
+
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: android/app/build/outputs/apk/debug/Infinity.Bottle.apk
+
+  build-ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build static export
+        run: node scripts/build-static.js
+        env:
+          NEXT_PUBLIC_STORAGE: local
+
+      - name: Sync Capacitor iOS
+        run: npx cap sync ios
+
+      - name: Build iOS (unsigned)
+        working-directory: ios/App
+        run: |
+          xcodebuild -workspace App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            | tail -20
+
+      - name: Package iOS app
+        run: |
+          cd ios/App/build/Build/Products/Release-iphonesimulator
+          mkdir -p Payload
+          cp -r App.app Payload/
+          zip -r Infinity.Bottle.iOS.zip Payload
+          mv Infinity.Bottle.iOS.zip "$GITHUB_WORKSPACE/Infinity.Bottle.iOS.zip"
+
+      - name: Upload iOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-app
+          path: Infinity.Bottle.iOS.zip
+
+  release:
+    needs: [build-windows, build-macos, build-android, build-ios]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List artifacts
+        run: find artifacts -type f
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/windows-installer/*.exe
+            artifacts/macos-dmg/*.dmg
+            artifacts/android-apk/*.apk
+            artifacts/ios-app/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

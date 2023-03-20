@@ -1,0 +1,11 @@
+services:
+  infinity-bottle:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - bottle-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  bottle-data:

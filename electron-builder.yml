@@ -1,0 +1,27 @@
+appId: com.muldercw.infinitybottle
+productName: Infinity Bottle
+directories:
+  output: dist-electron
+files:
+  - electron/**/*
+  - out/**/*
+  - public/**/*
+  - package.json
+extraMetadata:
+  main: electron/main.js
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+nsis:
+  oneClick: true
+  perMachine: false
+  allowToChangeInstallationDirectory: false
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  category: public.app-category.lifestyle

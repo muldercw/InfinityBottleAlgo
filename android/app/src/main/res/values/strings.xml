@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Infinity Bottle</string>
+    <string name="title_activity_main">Infinity Bottle</string>
+    <string name="package_name">com.muldercw.infinitybottle</string>
+    <string name="custom_url_scheme">com.muldercw.infinitybottle</string>
+</resources>
